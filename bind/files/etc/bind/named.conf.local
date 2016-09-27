@@ -1,0 +1,4 @@
+zone "34ruedesgardes.org" {
+     type master;
+     file "/etc/bind/db.34ruedesgardes.org";
+};

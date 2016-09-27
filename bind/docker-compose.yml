@@ -8,4 +8,7 @@ services:
       - "1000:1000"
     volumes:
       - "/srv/docker/bind:/data"
+      - "$PWD/files/etc/bind/db.192:/etc/bind/db.192"
+      - "$PWD/files/etc/bind/db.34ruedesgardes.org:/etc/bind/db.34ruedesgardes.org"
+      - "$PWD/files/etc/bind/named.conf.local:/etc/bind/named.conf.local"
     restart: always
