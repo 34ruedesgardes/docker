@@ -1,0 +1,11 @@
+version: '2'
+
+services:
+  bind:
+    image: mastermindg/rpi-dns:latest
+    ports:
+      - "53:53/udp"
+      - "1000:1000"
+    volumes:
+      - "/srv/docker/bind:/data"
+    restart: always
