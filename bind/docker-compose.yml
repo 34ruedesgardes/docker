@@ -1,5 +1,8 @@
 version: '2'
 
+volumes:
+  bind-data: ~
+
 services:
   bind:
     build: .
@@ -8,5 +11,5 @@ services:
       - "53:53/udp"
       - "1000:1000"
     volumes:
-      - "/srv/docker/bind:/data"
+      - "bind-data:/data"
     restart: always
