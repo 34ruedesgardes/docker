@@ -5,7 +5,7 @@ volumes:
 
 services:
   bind:
-    image: mastermindg/rpi-dns
+    image: 34ruedesgardes/rpi-dns
     ports:
       - "53:53/udp"
       - "1000:1000/tcp"
