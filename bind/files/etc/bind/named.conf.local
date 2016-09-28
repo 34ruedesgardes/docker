@@ -2,3 +2,9 @@ zone "34ruedesgardes.org" {
      type master;
      file "/etc/bind/db.34ruedesgardes.org";
 };
+
+zone "1.168.192.in-addr.arpa" {
+        type master;
+        notify no;
+        file "/etc/bind/db.192";
+};
