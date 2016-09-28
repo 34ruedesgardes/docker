@@ -5,11 +5,10 @@ volumes:
 
 services:
   bind:
-    build: .
-    image: mastermindg/rpi-dns:latest
+    image: pastishosting/rpi-dns
     ports:
       - "53:53/udp"
-      - "1000:1000"
+      - "1000:1000/tcp"
     volumes:
       - "bind-data:/data"
     restart: always
