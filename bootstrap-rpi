@@ -3,9 +3,13 @@
 # Paramêtres
 SHIPYARD_ROLE=${1:-node}
 MODE=${2:-both}
+RPI_HOSTNAME=$3
+HYPRIOT_VERSION=${4:-v1.0.0}
 
-# IP locale
+# Environnement
 LOCAL_IP=$(hostname -I | awk -F" " '{print $1}')
+CURRENT_IFACE=$(route | grep ${LOCAL_IP} | awk -F" " '{print $8}')
+echo "hypriot" > /tmp/${RPI_HOSTNAME}-ssh-password
 
 # Mise à jour de la liste des paquets
 sudo apt update
@@ -19,9 +23,12 @@ if [ $MODE != "only-rpi" ]; then
     fi
 
     # Flashage de la carte
+    if [ -f ./hypriotos-rpi-${HYPRIOT_VERSION}.img ]; then
+        cp ./hypriotos-rpi-${HYPRIOT_VERSION}.img /tmp/
+    fi
     sudo apt install -y uuid-runtime pv
     RPI_HOSTNAME="rpi-$(uuidgen)"
-    sudo ./flash --device mmcblk0 --ssid ruedesgardes --password survivant75 --hostname $RPI_HOSTNAME https://downloads.hypriot.com/hypriotos-rpi-v1.0.0.img.zip << USERINPUT
+    sudo ./flash --device mmcblk0 --ssid ruedesgardes --password survivant75 --hostname $RPI_HOSTNAME https://downloads.hypriot.com/hypriotos-rpi-${HYPRIOT_VERSION}.img.zip << USERINPUT
 mmcblk0
 yes
 USERINPUT
@@ -29,33 +36,41 @@ USERINPUT
     # On attend que le RPI soit démarré avec la carte qu'on vient de flasher
     while true; do
         echo ""
-        read -rp "La carte SD est prête : l'insérer dans le RaspberryPi et l'alimenter en électricité. Une fois ceci fait, écrivez \"oui\" :  " on
+        read -rp "La carte SD est prête : l'insérer dans le RaspberryPi et l'alimenter en électricité. Une fois qu'il a démarré (compter une minutes), écrivez \"oui\" :  " on
         case $on in
           [Oo]* ) break;;
           [Nn]* ) exit;;
           * ) echo 'Écrivez "oui" ou "non".';;
         esac
     done
-
-    echo "On attend deux minutes le temps que le RaspberryPi démarre..."
-    sleep 120
 fi
+
+# Obtention de l'IP du RPI (le hostname retourné pas nmap est faux :() et de l'IP du serveur Shipyard
+echo "On patiente 10 secondes que le RPI devienne visible sur le réseau..."
+sleep 10
+
+# Obtention de l'IP du serveur Shipyard
+for ip in $(nmap -sn ${LOCAL_IP}/24 -oG - | awk '/Up$/{print $2}'); do
+    ssh-keygen -R ${ip}
+    HAS_SHIPYARD=$(sshpass -p hypriot ssh -oStrictHostKeyChecking=no -oConnectTimeout=3 pirate@$ip docker inspect shipyard-controller)
+    if [[ $HAS_SHIPYARD != "[]" ]]; then
+        SHIPYARD_MASTER_IP=$ip
+    fi
+done
+
+# Obtention du RPI nouvellement créé (nmap retourne un nom de domaine erroné :()
+for ip in $(nmap -sn ${LOCAL_IP}/24 -oG - | awk '/Up$/{print $2}'); do
+    REMOTE_HOSTNAME=$(sshpass -p hypriot ssh -oStrictHostKeyChecking=no -oConnectTimeout=3 pirate@$ip hostname)
+    if [[ $REMOTE_HOSTNAME == $RPI_HOSTNAME ]]; then
+        RPI_HOSTNAME=$ip
+    fi
+done
 
 # Opérations sur le RPI
 if [ $MODE != "only-flash" ]; then
-    # Récupération de l'IP du nouveau RPI
-    # On ne peut pas servir de RPI_HOSTNAME car nmap retourne le hostname de la précédente installation
-    RPI_HOSTNAME=$(nmap -sP ${LOCAL_IP}/24 | grep rpi\- | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | tail -n1)
-    if [ $RPI_HOSTNAME == "" ]; then
-        echo "Impossible de trouver le RaspberryPi en scannant le réseau ${LOCAL_IP}/24"
-        exit 1
-    fi
 
     # Copie des clés SSH locales sur le RPI
-    ssh-keygen -R ${RPI_HOSTNAME}
-    echo "hypriot" > /tmp/${RPI_HOSTNAME}-ssh-password
-    sshpass -f /tmp/${RPI_HOSTNAME}-ssh-password ssh-copy-id -oStrictHostKeyChecking=no pirate@${RPI_HOSTNAME}
-    rm /tmp/${RPI_HOSTNAME}-ssh-password
+    sshpass -p hypriot ssh-copy-id -oStrictHostKeyChecking=no pirate@${RPI_HOSTNAME}
 
     # Mise à niveau des paquets
     ssh -oStrictHostKeyChecking=no pirate@${RPI_HOSTNAME} sudo apt update
@@ -65,8 +80,6 @@ if [ $MODE != "only-flash" ]; then
     if [ $SHIPYARD_ROLE == "master" ]; then
        ssh -oStrictHostKeyChecking=no pirate@${RPI_HOSTNAME} "curl -s https://raw.githubusercontent.com/janeczku/docker-shipyard-armv7/master/deploy.sh | bash -s"
     else
-        sudo apt install -y nmap
-        SHIPYARD_MASTER_IP=$(sudo nmap -sS -O -oG - -p 4001 ${LOCAL_IP}/24 | awk '/Up$/{print $2}' | tail -n1 )
         if [ $SHIPYARD_MASTER_IP == "" ]; then
             echo "Impossible de trouver nœud Shipyard maître"
             exit 1
